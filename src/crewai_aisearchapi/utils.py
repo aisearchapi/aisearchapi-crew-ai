@@ -1,91 +1,104 @@
-"""
-Utility functions for AI Search API CrewAI integration (new tools API)
+from typing import Any, Iterable, List, Optional, Union, Dict
+import os
 
-- Compatible with CrewAI >= 0.175.0
-- Returns crewai.tools.BaseTool instances
-"""
-
-from __future__ import annotations
-
-from typing import List, Optional
-from crewai.tools import BaseTool
-
-from .tool import AISearchTool, AISearchToolConfig
+# Import your client types
+# Your client exposes ChatMessage in its package (per your examples).
+from aisearchapi_client import ChatMessage  # type: ignore
 
 
-def create_research_tools(
-    api_key: str,
-    specialized_domains: Optional[List[str]] = None
-) -> List[BaseTool]:
+def env_api_key() -> str:
     """
-    Create research tools (general + optional domain-focused).
-
-    Args:
-        api_key: AI Search API key.
-        specialized_domains: List of domain names (strings). If given,
-                             creates extra tools named "<Domain>_Search".
-
-    Returns:
-        List[BaseTool]: Tool instances ready to pass to Agent(tools=[...]).
+    Get API key from env. You can rename the var if you use a different one.
     """
-    tools: List[BaseTool] = []
-
-    # General purpose search tool
-    general_search = AISearchTool(
-        api_key=api_key,
-        config=AISearchToolConfig(
-            default_response_type="markdown",
-            include_sources=True,
-            verbose=False,
-        ),
+    key = (
+        os.getenv("AISEARCH_API_KEY")
+        or os.getenv("AIS_API_KEY")
+        or os.getenv("AI_SEARCH_API_KEY")
     )
-    # You can customize the instance name/description
-    general_search.name = "General_Search"
-    general_search.description = "General purpose intelligent web search for any topic."
-    tools.append(general_search)
-
-    # Domain-focused tools (names/descriptions guide the LLM to pick them)
-    if specialized_domains:
-        for domain in specialized_domains:
-            spec_tool = AISearchTool(
-                api_key=api_key,
-                config=AISearchToolConfig(
-                    default_response_type="markdown",
-                    include_sources=True,
-                    verbose=False,
-                ),
-            )
-            safe_domain = domain.replace(" ", "_")
-            spec_tool.name = f"{safe_domain}_Search"
-            spec_tool.description = (
-                f"Specialized web search for {domain} related topics."
-            )
-            tools.append(spec_tool)
-
-    return tools
+    if not key:
+        raise ValueError(
+            "Missing API key. Set AISEARCH_API_KEY (or pass api_key= to AISearchTool)."
+        )
+    return key
 
 
-def create_fact_checker_tool(api_key: str) -> BaseTool:
+def to_chat_messages(
+    context: Optional[
+        Union[
+            str,
+            ChatMessage,
+            Dict[str, Any],
+            Iterable[Union[str, ChatMessage, Dict[str, Any], Iterable[str]]],
+        ]
+    ]
+) -> Optional[List[ChatMessage]]:
     """
-    Create a fact-checking tool instance.
+    Normalize many forms of context to a list[ChatMessage].
 
-    Args:
-        api_key: AI Search API key.
+    Accepted input:
+    - None
+    - "single string"
+    - ChatMessage
+    - {"role": "user", "content": "..."}
+    - [ ... any mix of the above ... ]
+    - [("user", "text"), ("assistant", "text")]  # tuple/list pairs also ok
 
-    Returns:
-        BaseTool: Configured fact-checking tool.
+    Returns None or a non-empty list of ChatMessage.
     """
-    fact_checker = AISearchTool(
-        api_key=api_key,
-        config=AISearchToolConfig(
-            default_response_type="markdown",
-            include_sources=True,
-            verbose=True,  # verbose helps when fact-checking
-        ),
-    )
-    fact_checker.name = "Fact_Checker"
-    fact_checker.description = (
-        "Verify facts and claims with source citations. "
-        "Use this to fact-check statements and find authoritative sources."
-    )
-    return fact_checker
+    if context is None:
+        return None
+
+    # Make it iterable
+    if isinstance(context, (str, ChatMessage, dict)):
+        items: Iterable = [context]  # type: ignore[assignment]
+    else:
+        items = context  # already iterable
+
+    out: List[ChatMessage] = []
+    for item in items:
+        if isinstance(item, ChatMessage):
+            out.append(item)
+        elif isinstance(item, str):
+            out.append(ChatMessage(role="user", content=item))
+        elif isinstance(item, dict):
+            role = str(item.get("role", "user"))
+            content = str(item.get("content", ""))
+            if content:
+                out.append(ChatMessage(role=role, content=content))
+        elif isinstance(item, (tuple, list)) and len(item) >= 1:
+            # ("user","hello") or ["hello"]
+            if len(item) == 1:
+                role, content = "user", str(item[0])
+            else:
+                role, content = str(item[0]), str(item[1])
+            if content:
+                out.append(ChatMessage(role=role, content=content))
+        else:
+            # fallback: stringify
+            out.append(ChatMessage(role="user", content=str(item)))
+
+    return out or None
+
+
+def format_sources(sources: Optional[Any]) -> str:
+    """
+    Make a readable sources list from many possible shapes.
+    """
+    if not sources:
+        return ""
+    lines: List[str] = []
+    for s in sources:
+        if isinstance(s, str):
+            lines.append(f"- {s}")
+        elif isinstance(s, dict):
+            title = s.get("title") or s.get("name") or s.get("source") or ""
+            url = s.get("url") or s.get("link") or ""
+            if title and url and title != url:
+                lines.append(f"- {title} — {url}")
+            elif url:
+                lines.append(f"- {url}")
+            elif title:
+                lines.append(f"- {title}")
+        else:
+            lines.append(f"- {s}")
+    return "\n".join(lines)

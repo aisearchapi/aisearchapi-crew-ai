@@ -1,10 +1,6 @@
-"""
-CrewAI AI Search API Integration
+"""CrewAI tool for AI Search API."""
 
-Provides tools for integrating AI Search API with CrewAI agents.
-"""
+from .tool import AISearchTool, AISearchInput
 
-from .tool import AISearchTool, AISearchToolConfig, aisearch_tool
-
-__version__ = "1.0.0"
-__all__ = ["AISearchTool", "AISearchToolConfig", "aisearch_tool"]
+__all__ = ["AISearchTool", "AISearchInput"]
+__version__ = "1.0.6"
