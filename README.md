@@ -1,4 +1,4 @@
-# AI Search API for CrewAI - Developer & SEO Guide
+# AI Search API for CrewAI
 
 [![PyPI version](https://badge.fury.io/py/crewai-aisearchapi.svg)](https://badge.fury.io/py/crewai-aisearchapi)
 [![Python Support](https://img.shields.io/pypi/pyversions/crewai-aisearchapi.svg)](https://pypi.org/project/crewai-aisearchapi/)
