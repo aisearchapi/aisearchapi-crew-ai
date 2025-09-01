@@ -1,23 +1,28 @@
 """
-AI Search API Tool for CrewAI
+AI Search API Tool for CrewAI (new tools API)
 
-This module provides a CrewAI-compatible tool for performing intelligent searches
-using the AI Search API.
+- Compatible with CrewAI >= 0.175.0
+- Uses crewai.tools.BaseTool and args_schema
+- Keeps config, context, and balance helpers
 """
 
+from __future__ import annotations
+
 import os
-import json
-from typing import Optional, List, Dict, Any, Type, Callable
-from dataclasses import dataclass, field
+from typing import Optional, List, Dict, Any, Type
 
-# Import from crewai directly - no crewai-tools dependency needed
-from crewai import Tool
-from pydantic import BaseModel, Field as PydanticField
+from dataclasses import dataclass
+from pydantic import BaseModel, Field
 
-# Import your client
+from crewai.tools import BaseTool
+
+# Your client SDK
 from aisearchapi_client import AISearchAPIClient, ChatMessage, AISearchAPIError
 
 
+# -----------------------------
+# Config
+# -----------------------------
 @dataclass
 class AISearchToolConfig:
     """Configuration for AI Search Tool"""
@@ -30,251 +35,191 @@ class AISearchToolConfig:
     verbose: bool = False
 
 
-class AISearchTool:
+# -----------------------------
+# Input schema for the tool
+# -----------------------------
+class AISearchInput(BaseModel):
+    query: str = Field(..., description="Search query text.")
+    context: Optional[str] = Field(
+        default=None,
+        description="Optional extra context for the search."
+    )
+    response_type: Optional[str] = Field(
+        default=None,
+        description="Response format: 'text' or 'markdown'."
+    )
+
+
+# -----------------------------
+# Tool implementation
+# -----------------------------
+class AISearchTool(BaseTool):
     """
-    AI Search API Tool for CrewAI
-    
-    This tool enables CrewAI agents to perform intelligent searches with
-    context awareness and semantic understanding using AI Search API.
-    
-    Example:
-        ```python
+    AI Search API Tool for CrewAI (BaseTool)
+
+    Usage (CrewAI 0.175+):
         from crewai import Agent, Task, Crew
         from crewai_aisearchapi import AISearchTool
-        
-        # Initialize the tool
-        search_tool = AISearchTool(api_key='your-api-key')
-        
-        # Create an agent with the tool
-        researcher = Agent(
-            role='Research Analyst',
-            goal='Find accurate information',
-            tools=[search_tool.as_tool()],
+
+        search_tool = AISearchTool(api_key="your-key")
+
+        agent = Agent(
+            name="Research Analyst",
+            role="Find accurate information",
+            goal="Deliver clear answers with sources",
+            tools=[search_tool],
             verbose=True
         )
-        
-        # Use in a crew
-        crew = Crew(
-            agents=[researcher],
-            tasks=[...],
-            verbose=True
-        )
-        ```
+
+        task = Task(description="Find info about Hyper-V benefits", agent=agent)
+        crew = Crew(agents=[agent], tasks=[task], verbose=True)
+        print(crew.kickoff())
     """
-    
+
+    # BaseTool attributes
+    name: str = "AI_Search"
+    description: str = (
+        "Perform intelligent web searches with context awareness. "
+        "Input should include a 'query' string. Optionally provide 'context' "
+        "and 'response_type' ('text' or 'markdown'). Returns a structured answer "
+        "and (optionally) source links."
+    )
+    args_schema: Type[BaseModel] = AISearchInput
+
+    # Custom init (BaseTool allows __init__)
     def __init__(
         self,
         api_key: Optional[str] = None,
         config: Optional[AISearchToolConfig] = None
     ):
-        """
-        Initialize the AI Search Tool
-        
-        Args:
-            api_key: API key for AI Search API (can also use AISEARCHAPI_API_KEY env var)
-            config: Optional configuration object
-        """
-        # Setup configuration
+        super().__init__()
         self.config = config or AISearchToolConfig()
-        
-        # Get API key from parameter, config, or environment
-        self.api_key = (
-            api_key or 
-            self.config.api_key or 
-            os.getenv('AISEARCHAPI_API_KEY')
-        )
-        
+
+        # Resolve API key: param > config > env
+        self.api_key = api_key or self.config.api_key or os.getenv("AISEARCHAPI_API_KEY")
         if not self.api_key:
             raise ValueError(
-                "API key is required. Provide it via parameter, "
-                "config, or AISEARCHAPI_API_KEY environment variable"
+                "API key is required. Pass api_key=..., set in config, "
+                "or set AISEARCHAPI_API_KEY env var."
             )
-        
-        # Initialize the client
+
+        # Init client
         self.client = AISearchAPIClient(
             api_key=self.api_key,
             base_url=self.config.base_url,
-            timeout=self.config.timeout
+            timeout=self.config.timeout,
         )
-        
-        # Store conversation context
+
+        # Keep short conversation context
         self.context_history: List[ChatMessage] = []
-    
-    def search(
+
+    # Main run method called by CrewAI
+    def _run(
         self,
         query: str,
         context: Optional[str] = None,
-        response_type: Optional[str] = None
+        response_type: Optional[str] = None,
+        **kwargs: Any
     ) -> str:
-        """
-        Execute a search query
-        
-        Args:
-            query: The search query
-            context: Optional context string
-            response_type: Response format ('text' or 'markdown')
-            
-        Returns:
-            Formatted search results with sources
-        """
         try:
-            # Build context messages
-            context_messages = []
-            
-            # Add provided context
+            # Build context messages (optional)
+            context_messages: List[ChatMessage] = []
+
             if context:
-                context_messages.append(
-                    ChatMessage(role='user', content=context)
-                )
-            
-            # Add recent history if available
+                context_messages.append(ChatMessage(role="user", content=context))
+
             if self.context_history:
-                # Limit context to recent messages
-                recent_context = self.context_history[-self.config.max_context_messages:]
-                context_messages.extend(recent_context)
-            
-            # Use default response type if not specified
+                # limit to recent messages
+                recent = self.context_history[-self.config.max_context_messages :]
+                context_messages.extend(recent)
+
+            # Default response type if missing
             if not response_type:
                 response_type = self.config.default_response_type
-            
-            # Log if verbose
+
             if self.config.verbose:
                 print(f"[AI Search] Query: {query}")
                 if context:
-                    print(f"[AI Search] Context: {context}")
-            
-            # Perform the search
+                    print(f"[AI Search] Extra context: {context}")
+
+            # Call API
             result = self.client.search(
                 prompt=query,
                 context=context_messages if context_messages else None,
-                response_type=response_type
+                response_type=response_type,
             )
-            
-            # Format the response
-            formatted_response = self._format_response(result, query)
-            
-            # Update context history
+
+            # Format
+            formatted = self._format_response(result)
+            # Update short history
             self._update_context(query, result.answer)
-            
-            return formatted_response
-            
+            return formatted
+
         except AISearchAPIError as e:
-            error_msg = f"AI Search API Error: {e.description}"
+            msg = f"AI Search API Error: {e.description}"
             if e.status_code == 433:
-                error_msg += "\n⚠️ Account quota exceeded. Please check your balance."
+                msg += "\n⚠️ Account quota exceeded. Please check your balance."
             elif e.status_code == 401:
-                error_msg += "\n⚠️ Invalid API key. Please check your credentials."
-            
+                msg += "\n⚠️ Invalid API key. Please check your credentials."
             if self.config.verbose:
-                print(f"[AI Search] Error: {error_msg}")
-            
-            return f"Search failed: {error_msg}"
-            
+                print(f"[AI Search] Error: {msg}")
+            return f"Search failed: {msg}"
+
         except Exception as e:
-            error_msg = f"Unexpected error: {str(e)}"
+            msg = f"Unexpected error: {str(e)}"
             if self.config.verbose:
-                print(f"[AI Search] Error: {error_msg}")
-            return f"Search failed: {error_msg}"
-    
-    def _format_response(self, result, query: str) -> str:
-        """Format the search response"""
-        parts = []
-        
-        # Add the main answer
-        parts.append(result.answer)
-        
-        # Add sources if configured
-        if self.config.include_sources and result.sources:
-            parts.append("\n\n**Sources:**")
-            for i, source in enumerate(result.sources, 1):
-                parts.append(f"- [{i}] {source}")
-        
-        # Add metadata if verbose
-        if self.config.verbose:
-            parts.append(f"\n\n*Response time: {result.total_time}ms*")
-        
+                print(f"[AI Search] Error: {msg}")
+            return f"Search failed: {msg}"
+
+    # Helpers
+    def _format_response(self, result) -> str:
+        parts: List[str] = [result.answer]
+
+        if self.config.include_sources and getattr(result, "sources", None):
+            parts.append("\n**Sources:**")
+            for i, src in enumerate(result.sources, 1):
+                parts.append(f"- [{i}] {src}")
+
+        if self.config.verbose and hasattr(result, "total_time"):
+            parts.append(f"\n*Response time: {result.total_time}ms*")
+
         return "\n".join(parts)
-    
-    def _update_context(self, query: str, answer: str):
-        """Update conversation context history"""
-        # Store query as context for future searches
+
+    def _update_context(self, query: str, answer: str) -> None:
+        # Keep minimal info to avoid leaking long content
         self.context_history.append(
-            ChatMessage(role='user', content=f"Previous query: {query[:200]}")
+            ChatMessage(role="user", content=f"Previous query: {query[:200]}")
         )
-        
-        # Limit history size
-        if len(self.context_history) > self.config.max_context_messages * 2:
-            self.context_history = self.context_history[-self.config.max_context_messages:]
-    
+        # Trim history
+        limit = self.config.max_context_messages
+        if len(self.context_history) > limit:
+            self.context_history = self.context_history[-limit:]
+
+    # Optional convenience methods (not used by CrewAI directly)
     def check_balance(self) -> Dict[str, Any]:
-        """
-        Check API credit balance
-        
-        Returns:
-            Dictionary with balance information
-        """
         try:
             balance = self.client.balance()
             return {
                 "available_credits": balance.available_credits,
-                "status": "active" if balance.available_credits > 0 else "depleted"
+                "status": "active" if balance.available_credits > 0 else "depleted",
             }
         except AISearchAPIError as e:
-            return {
-                "error": e.description,
-                "status": "error"
-            }
-    
-    def clear_context(self):
-        """Clear conversation context history"""
+            return {"error": e.description, "status": "error"}
+
+    def clear_context(self) -> None:
         self.context_history = []
         if self.config.verbose:
             print("[AI Search] Context history cleared")
-    
-    def as_tool(self) -> Tool:
-        """
-        Convert to CrewAI Tool object
-        
-        Returns:
-            CrewAI Tool instance
-        """
-        return Tool(
-            name="AI_Search",
-            description=(
-                "Perform intelligent web searches with context awareness. "
-                "Input should be a search query string. "
-                "Returns well-structured answers with source citations."
-            ),
-            func=self.search
-        )
 
 
+# -----------------------------
+# Convenience factory (optional)
+# -----------------------------
 def aisearch_tool(
     api_key: Optional[str] = None,
     config: Optional[AISearchToolConfig] = None
-) -> Tool:
+) -> AISearchTool:
     """
-    Create a CrewAI Tool for AI Search API
-    
-    This is a convenience function that creates a ready-to-use Tool object.
-    
-    Args:
-        api_key: API key for AI Search API
-        config: Optional configuration
-        
-    Returns:
-        CrewAI Tool instance
-        
-    Example:
-        ```python
-        from crewai import Agent
-        from crewai_aisearchapi import aisearch_tool
-        
-        agent = Agent(
-            role='Researcher',
-            tools=[aisearch_tool(api_key='your-key')]
-        )
-        ```
+    Return an AISearchTool instance (so you can do tools=[aisearch_tool(...)] )
     """
-    search = AISearchTool(api_key=api_key, config=config)
-    return search.as_tool()
+    return AISearchTool(api_key=api_key, config=config)
