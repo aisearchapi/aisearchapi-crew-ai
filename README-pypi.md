@@ -4,7 +4,7 @@
 [![Python Support](https://img.shields.io/pypi/pyversions/crewai-aisearchapi.svg)](https://pypi.org/project/crewai-aisearchapi/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A **Python integration for CrewAI** that connects your agents to the [AI Search API](https://aisearchapi.io?utm_source=github).  
+A **Python integration for CrewAI** that connects your agents to the [AI Search API](https://aisearchapi.io?utm_source=pypi).  
 It enables **semantic search, contextual queries, SEO‑friendly content generation, and intelligent answers with sources**.
 
 👉 To start, get your **free API key** from the [AI Search API dashboard](https://app.aisearchapi.io/dashboard).
@@ -191,5 +191,5 @@ MIT License - see the [LICENSE](LICENSE) file.
 
 - **Dashboard & API Key**: [AI Search API Dashboard](https://app.aisearchapi.io/dashboard)  
 - **Docs**: [docs.aisearchapi.io](https://docs.aisearchapi.io/)  
-- **Homepage**: [aisearchapi.io](https://aisearchapi.io?utm_source=github)  
+- **Homepage**: [aisearchapi.io](https://aisearchapi.io?utm_source=pypi)  
 - **Issues**: [GitHub Issues](https://github.com/aisearchapi/crewai-aisearchapi/issues)  

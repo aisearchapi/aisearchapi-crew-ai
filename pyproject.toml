@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crewai-aisearchapi"
-version = "1.0.6"
+version = "1.0.7"
 description = "AI Search API integration for CrewAI - Enable intelligent web search in your crews"
-readme = "README.md"
+readme = "README-pypi.md"
 license = {file = "LICENSE"}
 authors = [
     {name = "AI Search API", email = "admin@aisearchapi.io"}
