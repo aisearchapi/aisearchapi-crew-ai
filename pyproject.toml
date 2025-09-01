@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crewai-aisearchapi"
-version = "1.0.0"
-description = "AI Search API integration for CrewAI - Enable intelligent search capabilities in your crews"
+version = "1.0.1"
+description = "AI Search API integration for CrewAI - Enable intelligent web search in your crews"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
@@ -26,21 +26,16 @@ classifiers = [
 ]
 keywords = [
     "crewai",
-    "crewai-tools",
     "ai-agents",
     "search-api",
     "aisearchapi",
+    "web-search",
     "intelligent-search",
-    "research-automation",
-    "Ai search api",
-    "web search api summary api",
-    "summarization api",
-    "search api"
+    "research-automation"
 ]
 requires-python = ">=3.8"
 dependencies = [
     "crewai>=0.30.0",
-    "crewai-tools>=0.2.0",
     "aisearchapi-client>=1.0.0",
     "pydantic>=2.0.0"
 ]

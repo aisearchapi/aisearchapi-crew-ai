@@ -4,10 +4,10 @@ Advanced research crew with multiple specialized agents
 
 import os
 from crewai import Agent, Task, Crew, Process
-from crewai_aisearchapi import AISearchTool, create_fact_checker_tool
+from crewai_aisearchapi import aisearch_tool, create_fact_checker_tool
 
 # Initialize tools
-general_search = AISearchTool(api_key=os.getenv('AISEARCHAPI_API_KEY'))
+general_search = aisearch_tool(api_key=os.getenv('AISEARCHAPI_API_KEY'))
 fact_checker = create_fact_checker_tool(api_key=os.getenv('AISEARCHAPI_API_KEY'))
 
 # Create specialized agents

@@ -7,11 +7,14 @@ using the AI Search API.
 
 import os
 import json
-from typing import Optional, List, Dict, Any, Type
+from typing import Optional, List, Dict, Any, Type, Callable
 from dataclasses import dataclass, field
-from pydantic import BaseModel, Field
 
-from crewai_tools import BaseTool
+# Import from crewai directly - no crewai-tools dependency needed
+from crewai import Tool
+from pydantic import BaseModel, Field as PydanticField
+
+# Import your client
 from aisearchapi_client import AISearchAPIClient, ChatMessage, AISearchAPIError
 
 
@@ -27,35 +30,12 @@ class AISearchToolConfig:
     verbose: bool = False
 
 
-class AISearchToolSchema(BaseModel):
-    """Schema for AI Search Tool input"""
-    query: str = Field(
-        ...,
-        description="The search query or question to answer"
-    )
-    context: Optional[str] = Field(
-        None,
-        description="Optional context to enhance search understanding (e.g., 'I am researching renewable energy')"
-    )
-    response_type: Optional[str] = Field(
-        "markdown",
-        description="Response format: 'text' or 'markdown'"
-    )
-
-
-class AISearchTool(BaseTool):
+class AISearchTool:
     """
     AI Search API Tool for CrewAI
     
     This tool enables CrewAI agents to perform intelligent searches with
     context awareness and semantic understanding using AI Search API.
-    
-    Features:
-    - Intelligent search with context awareness
-    - Source citation and verification
-    - Markdown or plain text responses
-    - Rate limiting and error handling
-    - Conversation context preservation
     
     Example:
         ```python
@@ -69,7 +49,7 @@ class AISearchTool(BaseTool):
         researcher = Agent(
             role='Research Analyst',
             goal='Find accurate information',
-            tools=[search_tool],
+            tools=[search_tool.as_tool()],
             verbose=True
         )
         
@@ -82,20 +62,10 @@ class AISearchTool(BaseTool):
         ```
     """
     
-    name: str = "AI Search"
-    description: str = (
-        "Perform intelligent searches with context awareness. "
-        "Returns well-structured answers with source citations. "
-        "Use this tool when you need to find current information, "
-        "verify facts, or research topics in depth."
-    )
-    args_schema: Type[BaseModel] = AISearchToolSchema
-    
     def __init__(
         self,
         api_key: Optional[str] = None,
-        config: Optional[AISearchToolConfig] = None,
-        **kwargs
+        config: Optional[AISearchToolConfig] = None
     ):
         """
         Initialize the AI Search Tool
@@ -103,10 +73,7 @@ class AISearchTool(BaseTool):
         Args:
             api_key: API key for AI Search API (can also use AISEARCHAPI_API_KEY env var)
             config: Optional configuration object
-            **kwargs: Additional arguments passed to BaseTool
         """
-        super().__init__(**kwargs)
-        
         # Setup configuration
         self.config = config or AISearchToolConfig()
         
@@ -133,12 +100,11 @@ class AISearchTool(BaseTool):
         # Store conversation context
         self.context_history: List[ChatMessage] = []
     
-    def _run(
+    def search(
         self,
         query: str,
         context: Optional[str] = None,
-        response_type: Optional[str] = None,
-        **kwargs
+        response_type: Optional[str] = None
     ) -> str:
         """
         Execute a search query
@@ -147,7 +113,6 @@ class AISearchTool(BaseTool):
             query: The search query
             context: Optional context string
             response_type: Response format ('text' or 'markdown')
-            **kwargs: Additional arguments
             
         Returns:
             Formatted search results with sources
@@ -265,3 +230,51 @@ class AISearchTool(BaseTool):
         self.context_history = []
         if self.config.verbose:
             print("[AI Search] Context history cleared")
+    
+    def as_tool(self) -> Tool:
+        """
+        Convert to CrewAI Tool object
+        
+        Returns:
+            CrewAI Tool instance
+        """
+        return Tool(
+            name="AI_Search",
+            description=(
+                "Perform intelligent web searches with context awareness. "
+                "Input should be a search query string. "
+                "Returns well-structured answers with source citations."
+            ),
+            func=self.search
+        )
+
+
+def aisearch_tool(
+    api_key: Optional[str] = None,
+    config: Optional[AISearchToolConfig] = None
+) -> Tool:
+    """
+    Create a CrewAI Tool for AI Search API
+    
+    This is a convenience function that creates a ready-to-use Tool object.
+    
+    Args:
+        api_key: API key for AI Search API
+        config: Optional configuration
+        
+    Returns:
+        CrewAI Tool instance
+        
+    Example:
+        ```python
+        from crewai import Agent
+        from crewai_aisearchapi import aisearch_tool
+        
+        agent = Agent(
+            role='Researcher',
+            tools=[aisearch_tool(api_key='your-key')]
+        )
+        ```
+    """
+    search = AISearchTool(api_key=api_key, config=config)
+    return search.as_tool()

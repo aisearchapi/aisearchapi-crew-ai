@@ -4,12 +4,10 @@ Basic example of using AI Search API with CrewAI
 
 import os
 from crewai import Agent, Task, Crew
-from crewai_aisearchapi import AISearchTool
+from crewai_aisearchapi import aisearch_tool
 
-# Initialize the search tool
-search_tool = AISearchTool(
-    api_key=os.getenv('AISEARCHAPI_API_KEY')
-)
+# Create the search tool
+search_tool = aisearch_tool(api_key=os.getenv('AISEARCHAPI_API_KEY'))
 
 # Create a research agent
 researcher = Agent(

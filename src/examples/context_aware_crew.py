@@ -3,7 +3,7 @@ Context-aware research crew that maintains conversation history
 """
 
 import os
-from crewai import Agent, Task, Crew
+from crewai import Agent, Task, Crew, Process
 from crewai_aisearchapi import AISearchTool, AISearchToolConfig
 
 # Configure tool with context awareness
@@ -13,10 +13,13 @@ config = AISearchToolConfig(
     include_sources=True
 )
 
-search_tool = AISearchTool(
+search_instance = AISearchTool(
     api_key=os.getenv('AISEARCHAPI_API_KEY'),
     config=config
 )
+
+# Get the tool
+search_tool = search_instance.as_tool()
 
 # Create an interactive research agent
 research_assistant = Agent(
@@ -59,5 +62,5 @@ result = crew.kickoff()
 print(result)
 
 # Check remaining balance
-balance = search_tool.check_balance()
+balance = search_instance.check_balance()
 print(f"\nRemaining credits: {balance.get('available_credits', 'Unknown')}")
